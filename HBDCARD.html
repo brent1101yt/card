@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>密碼保護信件中</title>
+    <!-- 引入 Noto Serif TC (思源宋體)，這套字體對繁體中文支援最完整且不會缺字 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700&family=Montserrat:wght@300&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-top: #1a1a2e;
+            --bg-mid: #16213e;
+            --bg-bottom: #b56576;
+            --text-color: #333333;
+            --paper-bg: rgba(255, 255, 255, 0.95);
+            --line-color: #d1e4eb;
+            --warm-pink: #f2e9e4;
+            --seal-red: #b56576;
+            --line-height: 2.6em; /* 稍微增加行高以配合宋體字型 */
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            /* 使用思源宋體作為主要字體 */
+            font-family: 'Noto Serif TC', serif;
+            background: linear-gradient(to bottom, #1a1a2e, #16213e, #b56576);
+            min-height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            position: relative;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* 溫馨背景光點 */
+        #stars-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none;
+        }
+        .light-glow {
+            position: absolute;
+            background: radial-gradient(circle, rgba(255,244,224,0.5) 0%, rgba(255,244,224,0) 70%);
+            border-radius: 50%;
+            opacity: 0;
+            animation: floatGlow 10s ease-in-out infinite;
+        }
+        @keyframes floatGlow {
+            0%, 100% { opacity: 0; transform: translateY(0) scale(0.8); }
+            50% { opacity: 0.3; transform: translateY(-40px) scale(1.1); }
+        }
+
+        .scene {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 10;
+            transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        /* 密碼鎖畫面 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 40px 30px;
+            border-radius: 30px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            width: 90%; max-width: 360px;
+        }
+        input[type="password"] {
+            padding: 15px; border-radius: 12px; border: none;
+            background: rgba(255,255,255,0.15); color: white;
+            width: 100%; margin-bottom: 20px; text-align: center; 
+            letter-spacing: 5px; outline: none; font-size: 1.1rem;
+            font-family: inherit;
+        }
+        .btn-primary {
+            padding: 14px; border: none; border-radius: 12px;
+            background: #fff; color: #6d597a;
+            font-weight: 600; width: 100%; cursor: pointer; transition: 0.3s;
+            font-family: inherit;
+        }
+        .btn-primary:hover { background: #f2e9e4; transform: scale(1.02); }
+
+        /* 過渡文字 */
+        .intro-text {
+            font-size: 2.2rem;
+            letter-spacing: 0.4em;
+            text-align: center;
+            opacity: 0;
+            filter: blur(10px);
+            transition: all 2.5s ease;
+        }
+        .intro-text.show { opacity: 1; filter: blur(0); transform: scale(1.05); }
+
+        /* 信封 */
+        .envelope-wrapper {
+            position: relative; width: 320px; height: 220px; cursor: pointer;
+            perspective: 1000px;
+        }
+        .envelope {
+            position: absolute; width: 100%; height: 100%;
+            background: #c9ada7; border-radius: 5px; z-index: 2;
+        }
+        .flap {
+            position: absolute; top: 0; left: 0; width: 0; height: 0;
+            border-left: 160px solid transparent; border-right: 160px solid transparent;
+            border-top: 110px solid #9a8c98; transform-origin: top;
+            transition: transform 0.8s ease; z-index: 4;
+        }
+        .card-inside {
+            position: absolute; top: 10px; left: 10px; width: 300px; height: 200px;
+            background: #ffffff; transition: transform 1.2s ease;
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; color: #9a8c98; border-radius: 5px; z-index: 2;
+        }
+        .open .flap { transform: rotateX(180deg); z-index: 1; }
+        .open .card-inside { transform: translateY(-160px) rotate(-2deg); }
+
+        /* 閱讀內容區 */
+        .reading-container {
+            width: 90%;
+            max-width: 600px;
+            height: 80vh;
+            position: relative;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .notebook-paper {
+            flex: 1;
+            padding: var(--line-height) 35px; 
+            background-color: var(--paper-bg);
+            background-image: linear-gradient(var(--line-color) 1.5px, transparent 1.5px);
+            background-size: 100% var(--line-height); 
+            background-position: 0 calc(var(--line-height) * 1.95); /* 微調對齊 */
+            background-attachment: local; 
+            border-radius: 12px;
+            box-shadow: 0 15px 45px rgba(0,0,0,0.3);
+            overflow-y: auto;
+            color: var(--text-color);
+            line-height: var(--line-height); 
+            font-size: 1.15rem;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(181, 101, 118, 0.3) transparent;
+            letter-spacing: 0.05em;
+        }
+
+        .notebook-paper::-webkit-scrollbar {
+            width: 6px;
+        }
+        .notebook-paper::-webkit-scrollbar-thumb {
+            background-color: rgba(181, 101, 118, 0.2);
+            border-radius: 10px;
+        }
+
+        .watermark {
+            position: fixed; bottom: 20px; left: 20px;
+            font-family: 'Montserrat', sans-serif; font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4); opacity: 0; transition: 2s; z-index: 900;
+        }
+        .show-mark { opacity: 1; }
+
+        @media (max-width: 600px) {
+            .notebook-paper { 
+                padding: var(--line-height) 25px; 
+                font-size: 1.05rem; 
+                background-position: 0 calc(var(--line-height) * 1.9); 
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="stars-container"></div>
+    <canvas id="fx-canvas"></canvas>
+
+    <div id="watermark" class="watermark">Made by Brent Wang</div>
+
+    <!-- Scene 1: Lock -->
+    <div id="lock-screen" class="scene">
+        <div class="glass-panel">
+            <h2 style="margin-bottom:25px; font-weight:normal; letter-spacing: 2px;">專屬的信件</h2>
+            <input type="password" id="password-input" placeholder="輸入密碼">
+            <button class="btn-primary" onclick="startJourney()">開啟</button>
+            <p id="error-msg" style="color:#f2e9e4; margin-top:15px; font-size:0.85rem; min-height:1.2em;"></p>
+        </div>
+    </div>
+
+    <!-- Scene 2: For You -->
+    <div id="intro-scene" class="scene hidden">
+        <div class="intro-text" id="intro-content">
+            For You
+            <div style="font-size: 1.1rem; margin-top: 25px; opacity: 0.8; letter-spacing: 0.2em;">寫給最特別的你</div>
+        </div>
+    </div>
+
+    <!-- Scene 3: Envelope -->
+    <div id="envelope-scene" class="scene hidden">
+        <div class="envelope-wrapper" onclick="openEnvelope()">
+            <div class="flap"></div>
+            <div class="card-inside">
+                <span style="font-size: 1.4rem; letter-spacing: 1px;">Happy Birthday</span>
+            </div>
+            <div class="envelope"></div>
+        </div>
+    </div>
+
+    <!-- Scene 4: Reading -->
+    <div id="reading-scene" class="scene hidden">
+        <div class="reading-container">
+            <div class="notebook-paper" id="scroll-box">
+                <div id="text-target" style="white-space: pre-wrap;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /** 動畫系統：花瓣飄落 **/
+        const canvas = document.getElementById('fx-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor(x, y, color, velocity, size = 2) {
+                this.x = x; this.y = y;
+                this.color = color;
+                this.velocity = velocity;
+                this.alpha = 1;
+                this.size = size;
+                this.friction = 0.98;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+            update() {
+                this.velocity.x *= this.friction;
+                this.velocity.y *= this.friction;
+                this.velocity.y += 0.01;
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+                this.alpha -= 0.005;
+            }
+        }
+
+        let isReading = false;
+        function createPetal() {
+            if(!isReading) return;
+            if(Math.random() > 0.04) return; 
+            particles.push(new Particle(Math.random() * canvas.width, -10, '#f9dcc4', {
+                x: (Math.random() - 0.5) * 1,
+                y: Math.random() * 0.8 + 0.3
+            }, Math.random() * 3 + 2));
+        }
+
+        function animateFX() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach((p, i) => {
+                if (p.alpha <= 0) particles.splice(i, 1);
+                else { p.update(); p.draw(); }
+            });
+            createPetal();
+            requestAnimationFrame(animateFX);
+        }
+        animateFX();
+
+        /** 背景裝飾 **/
+        const starBox = document.getElementById('stars-container');
+        for(let i=0; i<30; i++){
+            const g = document.createElement('div');
+            g.className = 'light-glow';
+            const size = Math.random()*30 + 15;
+            g.style.width = size + 'px';
+            g.style.height = size + 'px';
+            g.style.left = Math.random()*100+'vw';
+            g.style.top = Math.random()*100+'vh';
+            g.style.animationDelay = Math.random()*5+'s';
+            starBox.appendChild(g);
+        }
+
+        function startJourney() {
+            const pwd = document.getElementById('password-input').value;
+            if(pwd === 'HBD0302') {
+                document.getElementById('watermark').classList.add('show-mark');
+                document.getElementById('lock-screen').classList.add('hidden');
+                
+                setTimeout(() => {
+                    document.getElementById('intro-scene').classList.remove('hidden');
+                    setTimeout(() => document.getElementById('intro-content').classList.add('show'), 500);
+                    
+                    setTimeout(() => {
+                        document.getElementById('intro-scene').classList.add('hidden');
+                        setTimeout(() => {
+                            document.getElementById('envelope-scene').classList.remove('hidden');
+                        }, 1200);
+                    }, 3500);
+                }, 800);
+            } else {
+                document.getElementById('error-msg').innerText = "密碼不對喔～";
+            }
+        }
+
+        function openEnvelope() {
+            const wrapper = document.querySelector('.envelope-wrapper');
+            if(wrapper.classList.contains('open')) return;
+            
+            wrapper.classList.add('open');
+            setTimeout(() => {
+                document.getElementById('envelope-scene').classList.add('hidden');
+                setTimeout(() => {
+                    document.getElementById('reading-scene').classList.remove('hidden');
+                    isReading = true;
+                    typeMessage();
+                }, 1000);
+            }, 3000);
+        }
+
+        const msg = `陳畇杉：
+
+可靠、信任是朋友間最重要的一件事，而這也是我在面對交友最難跨過的一個檻，在許多人之中，你一定是那唯一的存在。或許沒有太多的對話，可經過那麼久，彷彿慢慢地告訴我了你的細心以及可靠，對待每個朋友，也能夠放入自己的細心。能遇到一個讓人放心、可以信任的朋友，真的是很難的一件事，能遇到你，只能說真的很幸運了。
+
+面對考試以及許多挑戰，你經常面對挫折，可我想跟你說，挫折難免，你可以在面對後重新振作，並繼續面對生活上的種種難關，已經非常棒了。謝謝你有時聽我抱怨一些事情，給我面對事情的勇氣，在我需要時能在我身邊給予我建議。
+
+有時候你的心情會不好，我覺得這很正常，我覺得情緒這種東西就是很煩，不過如果真的這樣，或許我沒辦法幫上大忙，但我一定能陪著你，讓你不覺得無助。
+
+這是你的新的一歲，相信自己，你已經做得很好了。生日快樂！祝你在未來完成自己的目標，在不斷成長的人生裡，開心的面對每一天！願在會考後能夠再相聚，完成七年級後失去的那些共同時光，創造屬於我們的回憶！
+
+王柏欽`;
+
+        let charIdx = 0;
+        function typeMessage() {
+            const target = document.getElementById('text-target');
+            const box = document.getElementById('scroll-box');
+            if(charIdx < msg.length) {
+                target.innerText += msg[charIdx];
+                charIdx++;
+                box.scrollTop = box.scrollHeight;
+                let delay = 80; // 宋體視覺感較重，稍微加快一點點打字速度
+                if(['，','。','！','？','\n'].includes(msg[charIdx-1])) delay = 600;
+                setTimeout(typeMessage, delay);
+            }
+        }
+
+        document.getElementById('password-input').addEventListener('keypress', (e) => {
+            if(e.key === 'Enter') startJourney();
+        });
+    </script>
+</body>
+</html>
